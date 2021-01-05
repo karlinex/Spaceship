@@ -1,79 +1,105 @@
 import numpy as np
+
 import matplotlib
 matplotlib.use("TkAgg")
+
 import matplotlib.pyplot as plt
 plt.rcParams["figure.figsize"] = (10, 10)
 plt.ion()
 
-class Character:
+class MovableObject(object):
     def __init__(self):
         super().__init__()
+        self.__angle = np.random.random() * np.pi
+        self.attribute_name = 'Noname'
+
         self.geometry = []
-        self.__angle = 0
-        self.generate_geometry()
+        self.R = np.identity(3)
+
 
     def set_angle(self, angle):
         self.__angle = angle
+        theta = np.radians(self.__angle)
+        self.R = np.array([[np.cos(theta), -np.sin(theta), 0],
+                     [np.sin(theta), np.cos(theta), 0],
+                     [0, 0, 1]])
 
-    #TODO implement getter for angle
+
     def get_angle(self):
         return self.__angle
 
-    def generate_geometry(self):
-        pass
-
     def draw(self):
-        x_data = []
-        y_data = []
-        for vec2 in self.geometry:
-            x_data.append(vec2[0])
-            y_data.append(vec2[1])
-        plt.plot(x_data, y_data)
+        x_values = []
+        y_values = []
 
-class Player(Character):
+        for vec in self.geometry:
+            vec3d = np.array([ vec[0], vec[1], 1.0 ])
+            vec3d = np.dot(self.R, vec3d)
+            vec = np.array([ vec3d[0], vec3d[1] ])
+
+            x_values.append(vec[0])
+            y_values.append(vec[1])
+
+        plt.plot(x_values, y_values)
+
+class Asteroid(MovableObject):
     def __init__(self):
         super().__init__()
+        self.attribute_name = 'Asteroid'
 
-    def generate_geometry(self):
-        # TODO implement geometry to resemble space ship, centered around [0,0] coordinates
-        self.geometry = np.array([
+    def draw(self):
+        print('draw asteroid')
+
+class Player(MovableObject):
+    def __init__(self):
+        super().__init__()
+        self.attribute_name = 'Player'
+
+        self.geometry = np.array ([
+            [-1, 0],
+            [1, 0],
             [0, 1],
-            [-0.4, -0.5],
-            [-0.8, -1],
-            [0.8, -1],
-            [0.4, -0.5],
-            [0, 1]
-
+            [-1, 0]
         ])
 
-characters = []
-player = Player()
-characters.append(player)
+    # def draw(self):
+    #     plt.plot(self.geometry[:, 0], self.geometry[:, 1])
+
+
+playerA = Player()
+playerA.set_angle(0)
+
+actors = [Asteroid()]
+for _ in range(10):
+    actors.append(Asteroid())
+
+#actors += [Player()] #concat 2 lists
+actors.append(playerA)
 
 is_running = True
-
-def on_press(event):
-    global is_running
+def press(event):
+    global is_running, player
+    print('press', event.key)
     if event.key == 'escape':
         is_running = False
-    if event.key == 'left':
-        player.set_angle(player.get_angle() - 5)
-    if event.key == 'right':
-        player.set_angle(player.get_angle() + 5)
+    elif event.key == 'right':
+        playerA.set_angle(playerA.get_angle() - 5)
+    elif event.key == 'left':
+        playerA.set_angle(playerA.get_angle() + 5)
 
 fig, _ = plt.subplots()
-fig.canvas.mpl_connect('key_press_event', on_press)
+fig.canvas.mpl_connect('key_press_event', press)
 
-dt = 1e-2
 while is_running:
     plt.clf()
+
     plt.xlim(-10, 10)
     plt.ylim(-10, 10)
 
-    for each in characters:
-        each.draw()
-        #TODO display angle in plot title
-        plt.title(f"angle: {each.get_angle()}")
+    for actor in actors:  # polymorphism
+        actor.draw()
+
+        plt.title(f"angle: {playerA.get_angle()}")
 
     plt.draw()
-    plt.pause(dt)
+    plt.pause(0.01)
