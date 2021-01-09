@@ -21,8 +21,8 @@ class MovableObject(object):
         self.__angle = angle
         theta = np.radians(self.__angle)
         self.R = np.array([[np.cos(theta), -np.sin(theta), 0],
-                     [np.sin(theta), np.cos(theta), 0],
-                     [0, 0, 1]])
+                           [np.sin(theta), np.cos(theta),  0],
+                           [0,              0,             1]])
 
 
     def get_angle(self):
@@ -33,10 +33,12 @@ class MovableObject(object):
         y_values = []
 
         for vec in self.geometry:
-            vec3d = np.array([ vec[0], vec[1], 1.0 ])
+            vec3d = np.dot(vec, np.array([[1, 0],
+                                          [0, 1],
+                                          [0, 0]])) + np.array([0, 0, 1])
             vec3d = np.dot(self.R, vec3d)
-            vec = np.array([ vec3d[0], vec3d[1] ])
-
+            vec = np.dot(vec3d, np.array([[1, 0, 0],
+                                          [0, 1, 0]]))
             x_values.append(vec[0])
             y_values.append(vec[1])
 
