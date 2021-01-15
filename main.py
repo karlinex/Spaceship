@@ -1,107 +1,228 @@
 import numpy as np
-
 import matplotlib
-matplotlib.use("TkAgg")
 
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+
 plt.rcParams["figure.figsize"] = (10, 10)
 plt.ion()
 
-class MovableObject(object):
+
+def get_matrix_rotation(theta):
+    theta_rad = theta * np.pi / 180
+    theta_cos = np.cos(theta_rad)
+    theta_sin = np.sin(theta_rad)
+    R = np.array(
+        [
+            [theta_cos, -theta_sin, 0],
+            [theta_sin, theta_cos, 0],
+            [0, 0, 1]
+        ]
+    )
+    return R
+
+
+def get_matrix_translation(t_x, t_y):
+    T = np.array([
+        [1, 0, t_x],
+        [0, 1, t_y],
+        [0, 0, 1]
+    ])
+    return T
+
+
+def get_matrix_scale(s_x, s_y):
+    T = np.array([
+        [s_x, 0, 0],
+        [0, s_y, 0],
+        [0, 0, 1]
+    ])
+    return T
+
+
+def get_vec3_from_vec2(vec2):
+    I = np.array([
+        [1, 0],
+        [0, 1],
+        [0, 0]
+    ])
+
+    vec3 = np.dot(I, vec2) + np.array([0, 0, 1])
+    return vec3
+
+
+def get_vec2_from_vec3(vec3):
+    I = np.array([
+        [1, 0, 0],
+        [0, 1, 0]
+    ])
+
+    vec2 = np.dot(I, vec3)
+    return vec2
+
+class Character:
     def __init__(self):
         super().__init__()
-        self.__angle = np.random.random() * np.pi
-        self.attribute_name = 'Noname'
-
         self.geometry = []
-        self.R = np.identity(3)
 
+        self.angle = 0
+        self.pos = np.array([0.0, 0.0])
+        self.dir = np.array([0.0, 1.0])
+        self.speed = 1e-1
 
-    def set_angle(self, angle):
-        self.__angle = angle
-        theta = np.radians(self.__angle)
-        self.R = np.array([[np.cos(theta), -np.sin(theta), 0],
-                           [np.sin(theta), np.cos(theta),  0],
-                           [0,              0,             1]])
+        self.C = np.identity(3)  # Combined
+        self.R = np.identity(3)  # Rotation
+        self.T = np.identity(3)  # Translation
 
+        self.x_data = []
+        self.y_data = []
 
-    def get_angle(self):
-        return self.__angle
+        self.generate_geometry()
+        self.color = 'r'
 
-    def draw(self):
-        x_values = []
-        y_values = []
-
-        for vec in self.geometry:
-            vec3d = np.dot(vec, np.array([[1, 0],
-                                          [0, 1],
-                                          [0, 0]])) + np.array([0, 0, 1])
-            vec3d = np.dot(self.R, vec3d)
-            vec = np.dot(vec3d, np.array([[1, 0, 0],
-                                          [0, 1, 0]]))
-            x_values.append(vec[0])
-            y_values.append(vec[1])
-
-        plt.plot(x_values, y_values)
-
-class Asteroid(MovableObject):
-    def __init__(self):
-        super().__init__()
-        self.attribute_name = 'Asteroid'
+    def generate_geometry(self):
+        pass
 
     def draw(self):
-        print('draw asteroid')
+        self.R = get_matrix_rotation(self.angle)
 
-class Player(MovableObject):
+        dir3 = np.dot(self.R, np.array([0, 1, 0]))  # direction of original geometry
+        # rotated by absolute angle
+        self.dir = get_vec2_from_vec3(dir3)
+        self.pos += self.dir * self.speed  # speed
+
+        # TODO do not allow things to fly out of the space or spawn them in opposite side of the screen
+        if self.pos[0] > 10.0 or self.pos[0] < -10.0 or self.pos[1] > 10.0 or self.pos[1] < -10.0:
+            self.pos[0] = self.pos[0] * -1
+            self.pos[1] = self.pos[1] * -1
+
+        self.C = np.matmul(self.T_fix, self.S) if isinstance(self, Player) else np.identity(3)
+
+        self.C = np.matmul(self.R, self.C)
+        self.T = get_matrix_translation(t_x=self.pos[0], t_y=self.pos[1])
+        self.C = np.matmul(self.T, self.C)
+
+        self.x_data = []
+        self.y_data = []
+        for vec2 in self.geometry:
+            vec3 = get_vec3_from_vec2(vec2)
+
+            vec3 = np.dot(self.C, vec3)
+
+            vec2 = get_vec2_from_vec3(vec3)
+
+            self.x_data.append(vec2[0])
+            self.y_data.append(vec2[1])
+
+        plt.plot(self.x_data, self.y_data, color=self.color)
+
+
+class Player(Character):
     def __init__(self):
         super().__init__()
-        self.attribute_name = 'Player'
+        self.T_fix = get_matrix_translation(t_x=0, t_y=-0.5)
+        self.S = get_matrix_scale(s_x=0.5, s_y=1.5)
+        self.Score = 0
 
-        self.geometry = np.array ([
+
+    def generate_geometry(self):
+        self.geometry = np.array([
             [-1, 0],
-            [1, 0],
             [0, 1],
+            [1, 0],
             [-1, 0]
         ])
 
-    # def draw(self):
-    #     plt.plot(self.geometry[:, 0], self.geometry[:, 1])
+
+class Asteroid(Character):
+    def __init__(self):
+        super().__init__()
+
+        self.pos = np.random.random((2,)) * 20.0 - 10.0  # (-10..10, -10..10)
+        self.angle = np.random.random() * 360
+        self.color = 'b'
+
+    def generate_geometry(self):
+        step_t = 2 * np.pi / 20
+        radius = np.random.random() * 3 - 2
+
+        list_geometry = []
+        t = 0
+        while t < np.pi * 2:
+            # TODO to distort sphere change radius
+            radius += np.random.random() * 0.1 - 0.05
+            list_geometry.append(np.array([
+                np.cos(t) * radius,
+                np.sin(t) * radius]))
+            t += step_t
+
+        list_geometry.append(np.array(list_geometry[0]))
+        self.geometry = np.array(list_geometry)
+
+class Rocket(Character):
+    def __init__(self, player):
+        self.geometry = []
+
+        self.angle = player.angle
+        self.pos = np.array(player.pos)
+        self.dir = np.array(player.dir)
+        self.speed = 5e-1
+
+        self.C = np.identity(3)  # Combined
+        self.R = np.identity(3)  # Rotation
+        self.T = np.identity(3)  # Translation
+
+        self.generate_geometry()
+        self.color = 'g'
+
+    def generate_geometry(self):
+        self.geometry = np.array([
+            [-0.1, 0],
+            [0, 0.1],
+            [0.1, 0],
+            [0.1, -0.1],
+            [-0.1, -0.1],
+            [-0.1, 0]
+        ])
 
 
-playerA = Player()
-playerA.set_angle(0)
-
-actors = [Asteroid()]
+characters = []
+player = Player()
+characters.append(player)
 for _ in range(10):
-    actors.append(Asteroid())
-
-#actors += [Player()] #concat 2 lists
-actors.append(playerA)
+    characters.append(Asteroid())
 
 is_running = True
-def press(event):
+
+
+def on_press(event):
     global is_running, player
-    print('press', event.key)
     if event.key == 'escape':
         is_running = False
-    elif event.key == 'right':
-        playerA.set_angle(playerA.get_angle() - 5)
     elif event.key == 'left':
-        playerA.set_angle(playerA.get_angle() + 5)
+        player.angle += 5
+    elif event.key == 'right':
+        player.angle -= 5
+    elif event.key == ' ':
+        player.Score += 1
+        characters.append(Rocket(player))
+    # TODO shoot rockets
+
 
 fig, _ = plt.subplots()
-fig.canvas.mpl_connect('key_press_event', press)
+fig.canvas.mpl_connect('key_press_event', on_press)
 
+dt = 1e-1
 while is_running:
     plt.clf()
-
     plt.xlim(-10, 10)
     plt.ylim(-10, 10)
 
-    for actor in actors:  # polymorphism
-        actor.draw()
-
-        plt.title(f"angle: {playerA.get_angle()}")
+    for each in characters:
+        each.draw()
+        # TODO display score
+        if isinstance(each, Player):
+            plt.title(f"score: {each.Score}")
 
     plt.draw()
-    plt.pause(0.01)
+    plt.pause(dt)
